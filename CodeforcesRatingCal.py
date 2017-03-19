@@ -3,12 +3,9 @@ from mysql_connect import MysqlConnect
 
 class Contestant:
 
-    def __init__(self):
-        self.member = 0
-        self.rating = 0
-
-    def __init__(self, member, rating):
+    def __init__(self, member, points, rating):
         self.member = member
+        self.points = points
         self.rating = rating
 
 class CodeforcesRatingCalculator:
@@ -17,30 +14,25 @@ class CodeforcesRatingCalculator:
         self.db = MysqlConnect()
         self.db.connectDB()
         self.INITIAL_RATING = 1500
-        self.oldRatings = dict()
-        self.ranks = dict()
-        self.deltas = dict()
-        self.contestant = list()
+        self.contestants = list()
 
     def getRecord(self, contestId):
-        query_sql = "SELECT contestRank, standings_id_" + str(contestId) + ".member, rating " \
+        query_sql = "SELECT standings_id_" + str(contestId) + ".member, contestPoints, rating " \
                     "FROM standings_id_" + str(contestId) + ", registrants_id_" + str(contestId) + \
                     " WHERE standings_id_" + str(contestId) + ".member = registrants_id_" + str(contestId) + ".member"
         rst = self.db.query(query_sql)
         self.totParticipants = len(rst)
         for i in range(len(rst)):
             item = rst[i]
-            self.ranks[item[1]] = item[0]
-            self.oldRatings[item[1]] = item[2]
-            self.contestant.append(Contestant(item[1], item[2]))
+            self.contestants.append(Contestant(item[0], item[1], item[2]))
 
     def getEloWinProbability(self, Ra, Rb):
         return 1.0 / (1 + pow(10, (Rb-Ra)/400.0))
 
     def getSeed(self, rating):
         result = 1.0
-        for other in self.oldRatings:
-            result += self.getEloWinProbability(self.oldRatings[other], rating)
+        for other in self.contestants:
+            result += self.getEloWinProbability(other.rating, rating)
         return result
 
     def getRatingToRank(self, rank):
@@ -56,6 +48,42 @@ class CodeforcesRatingCalculator:
 
     def process(self):
 
+        if self.contestants == None:
+            return
+
+        # 重新计算 参赛者 rank
+        self.contestants.sort(key=lambda item: item.points, reverse=True)
+
+        idx = 0
+        points = self.contestants[0].points
+        i = 1
+        while i < self.totParticipants:
+            if self.contestants[i].points < points:
+                j = idx
+                while j < i:
+                    self.contestants[j].rank = i
+                idx = i
+                points = self.contestants[i].points
+
+        j = idx
+        while j < self.totParticipants:
+            self.contestants[j].rank = self.totParticipants
+
+        for member in self.contestants:
+            member.seed = 1.0
+            for other in self.contestants:
+                if member == other:
+                    continue
+                else:
+                    member.seed += self.getEloWinProbability(other.rating, member.rating)
+
+        for contestant in self.contestants:
+            midRank = math.sqrt(contestant.rank * contestant.seed)
+            contestant.needRating = self.getRatingToRank(midRank)
+            contestant.delta = (contestant.needRating - contestant.rating) // 2
+
+
+
         for member in self.oldRatings:
             seed = 1.0
             rating = self.oldRatings[member]
@@ -68,14 +96,22 @@ class CodeforcesRatingCalculator:
             needRating = self.getRatingToRank(minRank)
             self.deltas[member] = (needRating - rating) / 2
 
+        self.contestants.sort(key=lambda item:item.rating, reverse=True)
+
         # DO some adjuct
         # Total sum should not be more than ZERO.
         sum = 0
+        for contestant in self.contestants:
+            sum += contestant.delta
+        inc = -sum / self.totParticipants - 1
+        for contestant in self.contestants:
+
         for member in self.deltas:
             sum += self.deltas[member]
         inc = -sum / self.totParticipants - 1
         for member in self.deltas:
             sum += inc
+
 
         # Sum of top-4*sqrt should be adjusted to ZERO.
         sum = 0
@@ -90,6 +126,7 @@ class CodeforcesRatingCalculator:
             self.deltas[self.contestant[i].member] += inc
         # for member in self.deltas:
         #     self.deltas[member] += inc
+
 
     def query(self, member):
         print("RatingChanges %d | Rating: %d -> %d" % (self.deltas[member], self.oldRatings[member], self.oldRatings[member] + self.deltas[member]))
