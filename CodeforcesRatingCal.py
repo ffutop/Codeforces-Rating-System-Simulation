@@ -75,7 +75,7 @@ class CodeforcesRatingCalculator:
             sum += self.deltas[member]
         inc = -sum / self.totParticipants - 1
         for member in self.deltas:
-            sum += inc
+            self.deltas[member] += inc
 
         # Sum of top-4*sqrt should be adjusted to ZERO.
         sum = 0
