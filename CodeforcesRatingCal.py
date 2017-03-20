@@ -100,6 +100,7 @@ class CodeforcesRatingCalculator:
         for contestant in self.contestants:
             contestant.delta += inc
 
+
         # Sum of top-4*sqrt should be adjusted to ZERO.
         sum = 0
         zeroSumCount = min(4*round(math.sqrt(self.totParticipants)), self.totParticipants)
