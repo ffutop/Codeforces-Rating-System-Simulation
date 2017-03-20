@@ -3,10 +3,9 @@ from mysql_connect import MysqlConnect
 
 class Contestant:
 
-    def __init__(self, member, rank, rating):
+    def __init__(self, member, points, rating):
         self.member = member
-        # self.points = points
-        self.rank = rank
+        self.points = points
         self.rating = rating
 
 class CodeforcesRatingCalculator:
@@ -19,7 +18,7 @@ class CodeforcesRatingCalculator:
         self.records = dict()
 
     def getRecord(self, contestId):
-        query_sql = "SELECT standings_id_" + str(contestId) + ".member, contestRank, rating " \
+        query_sql = "SELECT standings_id_" + str(contestId) + ".member, contestPoints, rating " \
                     "FROM standings_id_" + str(contestId) + ", registrants_id_" + str(contestId) + \
                     " WHERE standings_id_" + str(contestId) + ".member = registrants_id_" + str(contestId) + ".member"
         rst = self.db.query(query_sql)
@@ -74,14 +73,12 @@ class CodeforcesRatingCalculator:
             return
 
         # 重新计算 参赛者 rank
-        # self.reassignRank()
+        self.reassignRank()
 
         for member in self.contestants:
             member.seed = 1.0
             for other in self.contestants:
-                if member == other:
-                    continue
-                else:
+                if member != other:
                     member.seed += self.getEloWinProbability(other.rating, member.rating)
 
         for contestant in self.contestants:
@@ -94,22 +91,44 @@ class CodeforcesRatingCalculator:
         # DO some adjuct
         # Total sum should not be more than ZERO.
         sum = 0
+
+        # for contestant in self.contestants:
+        #     print("%s %d %d" % (contestant.member, contestant.rating, contestant.delta) )
+
         for contestant in self.contestants:
             sum += contestant.delta
-        inc = -sum // self.totParticipants - 1
+        inc = -(sum // self.totParticipants) - 1
         for contestant in self.contestants:
             contestant.delta += inc
 
-
         # Sum of top-4*sqrt should be adjusted to ZERO.
         sum = 0
-        zeroSumCount = min(4*round(math.sqrt(self.totParticipants)), self.totParticipants)
-        self.contestants.sort(key=lambda contestant: contestant.rating, reverse=True)
+        zeroSumCount = min(int(4*round(math.sqrt(self.totParticipants))), self.totParticipants)
+
+        # for i in range(zeroSumCount):
+        #     print("%s %d %d" % (self.contestants[i].member, self.contestants[i].rating, self.contestants[i].delta))
+
         for i in range(zeroSumCount):
             sum += self.contestants[i].delta
-        inc = min(max(-sum // zeroSumCount, -10), 0)
+        inc = min(max(-(sum // zeroSumCount), -10), 0)
         for i in range(zeroSumCount):
             self.contestants[i].delta += inc
+
+        self.validateDeltas()
+
+    def validateDeltas(self):
+        self.contestants.sort(key=lambda item:item.points, reverse=True)
+
+        for i in range(self.totParticipants):
+            for j in range(i+1, self.totParticipants):
+                if self.contestants[i].rating > self.contestants[j].rating:
+                    if self.contestants[i].rating + self.contestants[i].delta < self.contestants[j].rating + self.contestants[j].delta:
+                        print("First rating invariant failed: %s vs. %s." % (self.contestants[i].member, self.contestants[j].member))
+
+                if self.contestants[i].rating < self.contestants[j].rating:
+                    if self.contestants[i].delta < self.contestants[j].delta:
+                        print(1)
+                        print("Second rating invariant failed: %s vs. %s." % (self.contestants[i].member, self.contestants[j].member))
 
     def prepareQuery(self):
         for contestant in self.contestants:
@@ -119,6 +138,10 @@ class CodeforcesRatingCalculator:
         record = self.records[member]
         print("RatingChanges %d | Rating: %d -> %d" % (record.delta, record.rating, record.rating+record.delta))
 
+    def printRecord(self):
+        for i in range(20):
+            self.query(self.contestants[i].member)
+
 if __name__ == "__main__":
 
     sysCal = CodeforcesRatingCalculator()
@@ -127,6 +150,7 @@ if __name__ == "__main__":
     sysCal.getRecord(contestId)
     sysCal.process()
     sysCal.prepareQuery()
+    sysCal.printRecord()
 
     while True:
         member = input("Please input the nickName: ")
