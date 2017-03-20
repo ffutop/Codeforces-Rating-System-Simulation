@@ -13,6 +13,9 @@ class CodeforcesAPI:
         self.db = MysqlConnect()
         self.db.connectDB()
 
+    def __del__(self):
+        self.db.closeDB()
+
     def getCodeforcesStandings(self, contestId):
 
         create_table_sql = "CREATE TABLE IF NOT EXISTS standings_Id_" + str(contestId)  \
@@ -102,12 +105,12 @@ if __name__ == "__main__":
 
     codeforcesAPI = CodeforcesAPI()
 
-    contestId = input("请输入 contestId：")
-    pages = input("请输入注册参赛者的人数：")
-    pages = (pages + 249) / 250
+    contestId = int(input("请输入 contestId："))
+    pages = int(input("请输入注册参赛者的人数："))
+    pages = (pages + 249) // 250
 
     # codeforcesAPI.getCodeforcesRatedList(contestId)
     # 获取 contest 最终排名
-    codeforcesAPI.getCodeforcesStandings(contestId)
+    # codeforcesAPI.getCodeforcesStandings(contestId)
     # 获取注册参赛者的 oldRating
     codeforcesAPI.getCodefocesRegistrants(contestId, pages)

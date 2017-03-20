@@ -3,9 +3,10 @@ from mysql_connect import MysqlConnect
 
 class Contestant:
 
-    def __init__(self, member, points, rating):
+    def __init__(self, member, rank, rating):
         self.member = member
-        self.points = points
+        # self.points = points
+        self.rank = rank
         self.rating = rating
 
 class CodeforcesRatingCalculator:
@@ -18,7 +19,7 @@ class CodeforcesRatingCalculator:
         self.records = dict()
 
     def getRecord(self, contestId):
-        query_sql = "SELECT standings_id_" + str(contestId) + ".member, contestPoints, rating " \
+        query_sql = "SELECT standings_id_" + str(contestId) + ".member, contestRank, rating " \
                     "FROM standings_id_" + str(contestId) + ", registrants_id_" + str(contestId) + \
                     " WHERE standings_id_" + str(contestId) + ".member = registrants_id_" + str(contestId) + ".member"
         rst = self.db.query(query_sql)
@@ -47,12 +48,7 @@ class CodeforcesRatingCalculator:
                 left = mid
         return left
 
-    def process(self):
-
-        if self.contestants == None:
-            return
-
-        # 重新计算 参赛者 rank
+    def reassignRank(self):
         self.contestants.sort(key=lambda item: item.points, reverse=True)
 
         idx = 0
@@ -63,15 +59,22 @@ class CodeforcesRatingCalculator:
                 j = idx
                 while j < i:
                     self.contestants[j].rank = i
-                    j+=1
+                    j += 1
                 idx = i
                 points = self.contestants[i].points
-            i+=1
-
+            i += 1
         j = idx
         while j < self.totParticipants:
             self.contestants[j].rank = self.totParticipants
-            j+=1
+            j += 1
+
+    def process(self):
+
+        if self.contestants == None:
+            return
+
+        # 重新计算 参赛者 rank
+        # self.reassignRank()
 
         for member in self.contestants:
             member.seed = 1.0
@@ -93,7 +96,7 @@ class CodeforcesRatingCalculator:
         sum = 0
         for contestant in self.contestants:
             sum += contestant.delta
-        inc = -sum / self.totParticipants - 1
+        inc = -sum // self.totParticipants - 1
         for contestant in self.contestants:
             contestant.delta += inc
 
@@ -103,7 +106,7 @@ class CodeforcesRatingCalculator:
         self.contestants.sort(key=lambda contestant: contestant.rating, reverse=True)
         for i in range(zeroSumCount):
             sum += self.contestants[i].delta
-        inc = min(max(-sum / zeroSumCount, -10), 0)
+        inc = min(max(-sum // zeroSumCount, -10), 0)
         for i in range(zeroSumCount):
             self.contestants[i].delta += inc
 
@@ -119,7 +122,7 @@ if __name__ == "__main__":
 
     sysCal = CodeforcesRatingCalculator()
 
-    contestId = 781
+    contestId = 790
     sysCal.getRecord(contestId)
     sysCal.process()
     sysCal.prepareQuery()
