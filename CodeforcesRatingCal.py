@@ -3,12 +3,10 @@ from mysql_connect import MysqlConnect
 
 class Contestant:
 
-    def __init__(self):
-        self.member = 0
-        self.rating = 0
-
-    def __init__(self, member, rating):
+    def __init__(self, member, rank, rating):
         self.member = member
+        # self.points = points
+        self.rank = rank
         self.rating = rating
 
 class CodeforcesRatingCalculator:
@@ -17,30 +15,26 @@ class CodeforcesRatingCalculator:
         self.db = MysqlConnect()
         self.db.connectDB()
         self.INITIAL_RATING = 1500
-        self.oldRatings = dict()
-        self.ranks = dict()
-        self.deltas = dict()
-        self.contestant = list()
+        self.contestants = list()
+        self.records = dict()
 
     def getRecord(self, contestId):
-        query_sql = "SELECT contestRank, standings_id_" + str(contestId) + ".member, rating " \
+        query_sql = "SELECT standings_id_" + str(contestId) + ".member, contestRank, rating " \
                     "FROM standings_id_" + str(contestId) + ", registrants_id_" + str(contestId) + \
                     " WHERE standings_id_" + str(contestId) + ".member = registrants_id_" + str(contestId) + ".member"
         rst = self.db.query(query_sql)
         self.totParticipants = len(rst)
         for i in range(len(rst)):
             item = rst[i]
-            self.ranks[item[1]] = item[0]
-            self.oldRatings[item[1]] = item[2]
-            self.contestant.append(Contestant(item[1], item[2]))
+            self.contestants.append(Contestant(item[0], item[1], item[2]))
 
     def getEloWinProbability(self, Ra, Rb):
         return 1.0 / (1 + pow(10, (Rb-Ra)/400.0))
 
     def getSeed(self, rating):
         result = 1.0
-        for other in self.oldRatings:
-            result += self.getEloWinProbability(self.oldRatings[other], rating)
+        for other in self.contestants:
+            result += self.getEloWinProbability(other.rating, rating)
         return result
 
     def getRatingToRank(self, rank):
@@ -54,53 +48,85 @@ class CodeforcesRatingCalculator:
                 left = mid
         return left
 
+    def reassignRank(self):
+        self.contestants.sort(key=lambda item: item.points, reverse=True)
+
+        idx = 0
+        points = self.contestants[0].points
+        i = 1
+        while i < self.totParticipants:
+            if self.contestants[i].points < points:
+                j = idx
+                while j < i:
+                    self.contestants[j].rank = i
+                    j += 1
+                idx = i
+                points = self.contestants[i].points
+            i += 1
+        j = idx
+        while j < self.totParticipants:
+            self.contestants[j].rank = self.totParticipants
+            j += 1
+
     def process(self):
 
-        for member in self.oldRatings:
-            seed = 1.0
-            rating = self.oldRatings[member]
-            for other in self.oldRatings:
-                if other == member:
+        if self.contestants == None:
+            return
+
+        # 重新计算 参赛者 rank
+        # self.reassignRank()
+
+        for member in self.contestants:
+            member.seed = 1.0
+            for other in self.contestants:
+                if member == other:
                     continue
                 else:
-                    seed += self.getEloWinProbability(self.oldRatings[other], rating)
-            minRank = math.sqrt(self.ranks[member] * seed)
-            needRating = self.getRatingToRank(minRank)
-            self.deltas[member] = (needRating - rating) / 2
+                    member.seed += self.getEloWinProbability(other.rating, member.rating)
+
+        for contestant in self.contestants:
+            midRank = math.sqrt(contestant.rank * contestant.seed)
+            contestant.needRating = self.getRatingToRank(midRank)
+            contestant.delta = (contestant.needRating - contestant.rating) // 2
+
+        self.contestants.sort(key=lambda item:item.rating, reverse=True)
 
         # DO some adjuct
         # Total sum should not be more than ZERO.
         sum = 0
-        for member in self.deltas:
-            sum += self.deltas[member]
-        inc = -sum / self.totParticipants - 1
-        for member in self.deltas:
-            self.deltas[member] += inc
+        for contestant in self.contestants:
+            sum += contestant.delta
+        inc = -sum // self.totParticipants - 1
+        for contestant in self.contestants:
+            contestant.delta += inc
+
 
         # Sum of top-4*sqrt should be adjusted to ZERO.
         sum = 0
         zeroSumCount = min(4*round(math.sqrt(self.totParticipants)), self.totParticipants)
-        self.contestant.sort(key=lambda contestant: contestant.rating, reverse=True)
+        self.contestants.sort(key=lambda contestant: contestant.rating, reverse=True)
         for i in range(zeroSumCount):
-            sum += self.deltas[self.contestant[i].member]
-        # for member in self.deltas:
-        #     sum += self.deltas[member]
-        inc = min(max(-sum / zeroSumCount, -10), 0)
+            sum += self.contestants[i].delta
+        inc = min(max(-sum // zeroSumCount, -10), 0)
         for i in range(zeroSumCount):
-            self.deltas[self.contestant[i].member] += inc
-        # for member in self.deltas:
-        #     self.deltas[member] += inc
+            self.contestants[i].delta += inc
+
+    def prepareQuery(self):
+        for contestant in self.contestants:
+            self.records[contestant.member] = contestant
 
     def query(self, member):
-        print("RatingChanges %d | Rating: %d -> %d" % (self.deltas[member], self.oldRatings[member], self.oldRatings[member] + self.deltas[member]))
+        record = self.records[member]
+        print("RatingChanges %d | Rating: %d -> %d" % (record.delta, record.rating, record.rating+record.delta))
 
 if __name__ == "__main__":
 
     sysCal = CodeforcesRatingCalculator()
 
-    contestId = 781
+    contestId = 790
     sysCal.getRecord(contestId)
     sysCal.process()
+    sysCal.prepareQuery()
 
     while True:
         member = input("Please input the nickName: ")

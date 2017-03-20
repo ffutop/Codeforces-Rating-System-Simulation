@@ -12,6 +12,9 @@ class MysqlConnect:
             charset='utf8mb4'
         )
 
+    def closeDB(self):
+        self.connection.close()
+
     def createTable(self, sql):
         try:
             with self.connection.cursor() as cursor:
