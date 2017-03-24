@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # TEST update()
 
     # TEST query()
-    contestId = 781
+    contestId = 786
 
     query_sql = "SELECT contestRank, standings_id_" + str(contestId) + ".member, rating " \
                 "FROM standings_id_" + str(contestId) + ", registrants_id_" + str(contestId) + \

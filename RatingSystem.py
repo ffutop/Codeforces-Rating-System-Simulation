@@ -111,6 +111,6 @@ if __name__ == "__main__":
 
     # codeforcesAPI.getCodeforcesRatedList(contestId)
     # 获取 contest 最终排名
-    # codeforcesAPI.getCodeforcesStandings(contestId)
+    codeforcesAPI.getCodeforcesStandings(contestId)
     # 获取注册参赛者的 oldRating
-    codeforcesAPI.getCodefocesRegistrants(contestId, pages)
+    # codeforcesAPI.getCodefocesRegistrants(contestId, pages)

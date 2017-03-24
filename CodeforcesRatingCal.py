@@ -146,7 +146,7 @@ if __name__ == "__main__":
 
     sysCal = CodeforcesRatingCalculator()
 
-    contestId = 790
+    contestId = 786
     sysCal.getRecord(contestId)
     sysCal.process()
     sysCal.prepareQuery()
